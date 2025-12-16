@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jira Integration POC</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .status-section {
+      background: #f7f9fc;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 30px;
+      border-left: 4px solid #667eea;
+    }
+
+    .status-section.connected {
+      border-left-color: #48bb78;
+      background: #f0fff4;
+    }
+
+    .status-section.disconnected {
+      border-left-color: #f56565;
+      background: #fff5f5;
+    }
+
+    .status-text {
+      font-weight: 600;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+
+    .site-info {
+      color: #666;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+
+    .btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: inline-block;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn:disabled {
+      background: #cbd5e0;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: #e53e3e;
+    }
+
+    .btn-secondary:hover {
+      background: #c53030;
+      box-shadow: 0 4px 12px rgba(229, 62, 62, 0.4);
+    }
+
+    .form-section {
+      display: none;
+    }
+
+    .form-section.active {
+      display: block;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    select, input, textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.3s ease;
+    }
+
+    select:focus, input:focus, textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+      margin-left: 8px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .result-section {
+      display: none;
+      background: #f0fff4;
+      border: 2px solid #48bb78;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+
+    .result-section.active {
+      display: block;
+    }
+
+    .result-section.error {
+      background: #fff5f5;
+      border-color: #f56565;
+    }
+
+    .result-title {
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #22543d;
+      font-size: 16px;
+    }
+
+    .result-section.error .result-title {
+      color: #742a2a;
+    }
+
+    .result-content {
+      font-size: 14px;
+      color: #2d3748;
+    }
+
+    .ticket-link {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .ticket-link:hover {
+      text-decoration: underline;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Jira Integration POC</h1>
+    <p class="subtitle">Connect your Jira account and create tickets</p>
+
+    <!-- Status Section -->
+    <div id="statusSection" class="status-section">
+      <div class="status-text" id="statusText">Checking connection...</div>
+      <div class="site-info" id="siteInfo"></div>
+      <div class="button-group">
+        <button id="connectBtn" class="btn hidden" onclick="connectJira()">
+          Connect Jira Account
+        </button>
+        <button id="disconnectBtn" class="btn btn-secondary hidden" onclick="disconnectJira()">
+          Disconnect
+        </button>
+      </div>
+    </div>
+
+    <!-- Ticket Creation Form -->
+    <div id="formSection" class="form-section">
+      <h2 style="margin-bottom: 20px; color: #333;">Create Jira Ticket</h2>
+
+      <form id="ticketForm" onsubmit="createTicket(event)">
+        <div class="form-group">
+          <label for="projectSelect">Project *</label>
+          <select id="projectSelect" required onchange="loadIssueTypes()">
+            <option value="">Select a project...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="issueTypeSelect">Issue Type *</label>
+          <select id="issueTypeSelect" required>
+            <option value="">Select issue type...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="summaryInput">Summary *</label>
+          <input
+            type="text"
+            id="summaryInput"
+            placeholder="Brief description of the issue"
+            required
+            maxlength="255"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="descriptionInput">Description</label>
+          <textarea
+            id="descriptionInput"
+            placeholder="Detailed description (optional)"
+          ></textarea>
+        </div>
+
+        <button type="submit" class="btn" id="submitBtn">
+          Create Ticket
+        </button>
+      </form>
+    </div>
+
+    <!-- Result Section -->
+    <div id="resultSection" class="result-section">
+      <div class="result-title" id="resultTitle">Success!</div>
+      <div class="result-content" id="resultContent"></div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let isConnected = false;
+    let projects = [];
+    let currentProjectKey = '';
+
+    // Initialize on page load
+    window.addEventListener('load', () => {
+      checkAuthStatus();
+    });
+
+    /**
+     * Check authentication status
+     */
+    async function checkAuthStatus() {
+      try {
+        const response = await fetch('/auth/status');
+        const data = await response.json();
+
+        isConnected = data.connected;
+
+        const statusSection = document.getElementById('statusSection');
+        const statusText = document.getElementById('statusText');
+        const siteInfo = document.getElementById('siteInfo');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const formSection = document.getElementById('formSection');
+
+        if (isConnected) {
+          statusSection.className = 'status-section connected';
+          statusText.textContent = '✓ Connected to Jira';
+          siteInfo.textContent = `Site: ${data.site}`;
+          connectBtn.classList.add('hidden');
+          disconnectBtn.classList.remove('hidden');
+          formSection.classList.add('active');
+
+          // Load projects
+          loadProjects();
+        } else {
+          statusSection.className = 'status-section disconnected';
+          statusText.textContent = '✗ Not Connected';
+          siteInfo.textContent = '';
+          connectBtn.classList.remove('hidden');
+          disconnectBtn.classList.add('hidden');
+          formSection.classList.remove('active');
+        }
+      } catch (error) {
+        console.error('Error checking auth status:', error);
+        showError('Failed to check connection status');
+      }
+    }
+
+    /**
+     * Connect to Jira (OAuth flow)
+     */
+    function connectJira() {
+      window.location.href = '/auth/jira';
+    }
+
+    /**
+     * Disconnect from Jira
+     */
+    async function disconnectJira() {
+      try {
+        const response = await fetch('/auth/disconnect', {
+          method: 'POST'
+        });
+
+        if (response.ok) {
+          window.location.reload();
+        } else {
+          showError('Failed to disconnect');
+        }
+      } catch (error) {
+        console.error('Error disconnecting:', error);
+        showError('Failed to disconnect');
+      }
+    }
+
+    /**
+     * Load projects from Jira
+     */
+    async function loadProjects() {
+      const projectSelect = document.getElementById('projectSelect');
+      projectSelect.innerHTML = '<option value="">Loading projects...</option>';
+      projectSelect.disabled = true;
+
+      try {
+        const response = await fetch('/api/projects');
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch projects');
+        }
+
+        projects = await response.json();
+
+        projectSelect.innerHTML = '<option value="">Select a project...</option>';
+        projects.forEach(project => {
+          const option = document.createElement('option');
+          option.value = project.key;
+          option.textContent = `${project.name} (${project.key})`;
+          projectSelect.appendChild(option);
+        });
+
+        projectSelect.disabled = false;
+      } catch (error) {
+        console.error('Error loading projects:', error);
+        projectSelect.innerHTML = '<option value="">Failed to load projects</option>';
+        showError('Failed to load projects. Please try reconnecting.');
+      }
+    }
+
+    /**
+     * Load issue types for selected project
+     */
+    async function loadIssueTypes() {
+      const projectSelect = document.getElementById('projectSelect');
+      const issueTypeSelect = document.getElementById('issueTypeSelect');
+
+      currentProjectKey = projectSelect.value;
+
+      if (!currentProjectKey) {
+        issueTypeSelect.innerHTML = '<option value="">Select issue type...</option>';
+        issueTypeSelect.disabled = true;
+        return;
+      }
+
+      issueTypeSelect.innerHTML = '<option value="">Loading issue types...</option>';
+      issueTypeSelect.disabled = true;
+
+      try {
+        const response = await fetch(`/api/issuetypes?projectKey=${currentProjectKey}`);
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch issue types');
+        }
+
+        const issueTypes = await response.json();
+
+        issueTypeSelect.innerHTML = '<option value="">Select issue type...</option>';
+        issueTypes.forEach(type => {
+          const option = document.createElement('option');
+          option.value = type.name;
+          option.textContent = type.name;
+          projectSelect.appendChild(option);
+          issueTypeSelect.appendChild(option);
+        });
+
+        issueTypeSelect.disabled = false;
+      } catch (error) {
+        console.error('Error loading issue types:', error);
+        issueTypeSelect.innerHTML = '<option value="">Failed to load issue types</option>';
+        showError('Failed to load issue types');
+      }
+    }
+
+    /**
+     * Create a Jira ticket
+     */
+    async function createTicket(event) {
+      event.preventDefault();
+
+      const submitBtn = document.getElementById('submitBtn');
+      const projectKey = document.getElementById('projectSelect').value;
+      const issueType = document.getElementById('issueTypeSelect').value;
+      const summary = document.getElementById('summaryInput').value;
+      const description = document.getElementById('descriptionInput').value;
+
+      // Show loading state
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = 'Creating Ticket<span class="loading"></span>';
+      hideResult();
+
+      try {
+        const response = await fetch('/api/ticket', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            projectKey,
+            issueType,
+            summary,
+            description
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.details || data.error || 'Failed to create ticket');
+        }
+
+        // Show success
+        showSuccess(`Ticket created successfully!<br><br>
+          <strong>Key:</strong> ${data.key}<br>
+          <a href="${data.url}" target="_blank" class="ticket-link">Open in Jira →</a>
+        `);
+
+        // Reset form
+        document.getElementById('ticketForm').reset();
+        document.getElementById('issueTypeSelect').innerHTML = '<option value="">Select issue type...</option>';
+        document.getElementById('issueTypeSelect').disabled = true;
+
+      } catch (error) {
+        console.error('Error creating ticket:', error);
+        showError(error.message);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Create Ticket';
+      }
+    }
+
+    /**
+     * Show success message
+     */
+    function showSuccess(message) {
+      const resultSection = document.getElementById('resultSection');
+      const resultTitle = document.getElementById('resultTitle');
+      const resultContent = document.getElementById('resultContent');
+
+      resultSection.className = 'result-section active';
+      resultTitle.textContent = 'Success!';
+      resultContent.innerHTML = message;
+    }
+
+    /**
+     * Show error message
+     */
+    function showError(message) {
+      const resultSection = document.getElementById('resultSection');
+      const resultTitle = document.getElementById('resultTitle');
+      const resultContent = document.getElementById('resultContent');
+
+      resultSection.className = 'result-section active error';
+      resultTitle.textContent = 'Error';
+      resultContent.textContent = message;
+    }
+
+    /**
+     * Hide result section
+     */
+    function hideResult() {
+      const resultSection = document.getElementById('resultSection');
+      resultSection.classList.remove('active');
+    }
+  </script>
+</body>
+</html>
